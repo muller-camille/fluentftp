@@ -1067,17 +1067,7 @@ namespace FluentFTP {
 
 			SetCachedHostAddresses(host, ipad);
 
-			m_netStream = new NetworkStream(m_socket);
-			m_netStream.ReadTimeout = m_readTimeout;
-			m_netStream.WriteTimeout = m_writeTimeout;
-			m_lastActivity = DateTime.UtcNow;
-
-			ConnectionState = FtpConnectionState.Connected;
-
-			if (!IsControlConnection) {
-				// the NOOP daemon needs to know this
-				Client.Status.NoopDaemonCmdMode = false;
-			}
+			SetConnected();
 		}
 
 		/// <summary>
@@ -1236,6 +1226,36 @@ namespace FluentFTP {
 
 			SetCachedHostAddresses(host, ipad);
 
+			SetConnected();
+		}
+
+		/// <summary>
+		/// Use a socket that is already connected to the server instead of opening one, for example a channel
+		/// of an SSH jump host or a connection made through a proxy that FluentFTP does not support.
+		/// Call it from an override of the client's Connect/ConnectAsync(FtpSocketStream, ...) methods, in place
+		/// of the stream's own Connect: no DNS lookup is made, and the stream takes ownership of the socket.
+		/// </summary>
+		/// <param name="socket">A connected stream socket</param>
+		public void Connect(Socket socket) {
+			if (socket == null) {
+				throw new ArgumentNullException(nameof(socket));
+			}
+			if (!socket.Connected) {
+				throw new ArgumentException("The socket must be connected.", nameof(socket));
+			}
+
+			string connText = this.IsControlConnection ? "control" : "data";
+			((IInternalFtpClient)Client).LogStatus(FtpTraceLevel.Verbose, "Connecting " + Client.ClientType + ".FtpSocketStream(" + connText + ") on a socket provided by the application");
+
+			m_socket = socket;
+
+			SetConnected();
+		}
+
+		/// <summary>
+		/// Wrap the connected socket in a stream and mark the connection as connected
+		/// </summary>
+		private void SetConnected() {
 			m_netStream = new NetworkStream(m_socket);
 			m_netStream.ReadTimeout = m_readTimeout;
 			m_netStream.WriteTimeout = m_writeTimeout;
